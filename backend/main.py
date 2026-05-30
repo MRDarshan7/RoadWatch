@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from routers import authorities, complaints, roads
 
 app = FastAPI(title="RoadWatch API")
 
@@ -24,3 +25,8 @@ def root_health_check():
 @app.get("/health")
 def health_check():
     return health_payload()
+
+
+app.include_router(roads.router, prefix="/roads", tags=["roads"])
+app.include_router(complaints.router, prefix="/complaints", tags=["complaints"])
+app.include_router(authorities.router, prefix="/authorities", tags=["authorities"])
