@@ -31,6 +31,7 @@ class MaintenanceSummary(BaseModel):
     last_relaying_date: date | None
     activity_type: str | None
     days_since_repair: int | None
+    next_scheduled: date | None = None
 
 
 class AuthoritySummary(BaseModel):
@@ -113,4 +114,3 @@ class AuthorityDetail(BaseModel):
     zones_handled: list[str] | dict[str, Any] | None
     office_contact: str | None
     email: str | None
-

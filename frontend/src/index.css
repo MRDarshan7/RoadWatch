@@ -1,8 +1,32 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import 'leaflet/dist/leaflet.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+html,
 body {
   margin: 0;
+  min-height: 100%;
+  background: #0f172a;
+  font-family: 'Inter', sans-serif;
 }
 
+#root {
+  min-height: 100vh;
+}
+
+.leaflet-container {
+  background: #0f172a;
+  font-family: 'Inter', sans-serif;
+}
+
+.leaflet-control-attribution {
+  background: rgba(15, 23, 42, 0.78) !important;
+  color: #cbd5e1 !important;
+}
+
+.leaflet-control-attribution a {
+  color: #38bdf8 !important;
+}

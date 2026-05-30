@@ -129,6 +129,7 @@ def get_road(road_id: str, db: Session = Depends(get_db)):
             last_relaying_date=maintenance.last_relaying_date,
             activity_type=maintenance.activity_type,
             days_since_repair=days_since_repair,
+            next_scheduled=maintenance.next_scheduled,
         )
         if maintenance
         else None,
@@ -146,4 +147,3 @@ def get_road(road_id: str, db: Session = Depends(get_db)):
             latest_descriptions=[complaint.description for complaint in complaints[:3] if complaint.description],
         ),
     )
-
