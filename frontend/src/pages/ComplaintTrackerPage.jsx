@@ -47,6 +47,7 @@ function ComplaintTrackerPage() {
   }, [complaint_id]);
 
   const currentIndex = Math.max(0, statuses.indexOf(complaint?.status || 'Submitted'));
+  const issues = complaint?.issue_types?.length ? complaint.issue_types : [complaint?.issue_type].filter(Boolean);
 
   return (
     <main className="min-h-[calc(100vh-4rem)] bg-[#0f172a] px-4 py-8">
@@ -103,7 +104,7 @@ function ComplaintTrackerPage() {
               <div className="rounded-xl bg-[#1e293b] p-5 shadow-xl">
                 <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[#94a3b8]">Issue</h3>
                 <div className="flex flex-wrap items-center gap-2">
-                  {(complaint.issue_types?.length ? complaint.issue_types : [complaint.issue_type]).filter(Boolean).map((issue) => (
+                  {issues.map((issue) => (
                     <span key={issue} className="rounded-full bg-[#0f172a] px-3 py-1 text-xs font-bold text-[#38bdf8]">
                       {issue}
                     </span>
@@ -111,6 +112,26 @@ function ComplaintTrackerPage() {
                   <span className="rounded-full bg-[#334155] px-3 py-1 text-xs font-bold text-[#f1f5f9]">{complaint.severity}</span>
                 </div>
                 <p className="mt-3 text-sm leading-6 text-[#94a3b8]">{complaint.description}</p>
+              </div>
+
+              <div className="rounded-xl bg-[#1e293b] p-5 shadow-xl md:col-span-2">
+                <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[#94a3b8]">AI Triage</h3>
+                <div className="mb-4 flex flex-wrap gap-2">
+                  <span className="rounded-full bg-[#38bdf8] px-3 py-1 text-xs font-bold text-[#0f172a]">
+                    Urgency: {complaint.urgency_score ?? 'Pending'}/10
+                  </span>
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-bold ${
+                      complaint.safety_risk ? 'bg-red-500 text-white' : 'bg-[#334155] text-[#f1f5f9]'
+                    }`}
+                  >
+                    {complaint.safety_risk ? 'Safety Risk' : 'No Immediate Safety Risk'}
+                  </span>
+                </div>
+                <p className="text-sm leading-6 text-[#f1f5f9]">{complaint.ai_summary || 'AI summary pending.'}</p>
+                {complaint.ai_reasoning ? (
+                  <p className="mt-3 text-xs leading-5 text-[#94a3b8]">{complaint.ai_reasoning}</p>
+                ) : null}
               </div>
 
               {complaint.media_url ? (

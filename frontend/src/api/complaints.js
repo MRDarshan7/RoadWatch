@@ -18,6 +18,11 @@ export async function submitComplaint(data) {
   return response.data;
 }
 
+export async function classifyComplaint(data) {
+  const response = await api.post('/complaints/classify', data);
+  return response.data;
+}
+
 export async function getComplaint(id) {
   const response = await api.get(`/complaints/${id}`);
   return response.data;

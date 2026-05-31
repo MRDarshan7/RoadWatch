@@ -11,7 +11,15 @@ from supabase import create_client
 
 from database import get_db
 from models import Authority, Complaint, RoadSegment
-from schemas import ComplaintCreate, ComplaintCreateResponse, ComplaintDetail, UploadImageResponse
+from schemas import (
+    ComplaintClassificationResponse,
+    ComplaintClassifyRequest,
+    ComplaintCreate,
+    ComplaintCreateResponse,
+    ComplaintDetail,
+    UploadImageResponse,
+)
+from services.classifier import classify_complaint
 
 router = APIRouter()
 
@@ -56,6 +64,10 @@ def complaint_detail(db, complaint):
         assigned_authority_name=authority_name,
         assigned_officer=assigned_officer,
         sla_deadline=complaint.sla_deadline,
+        ai_summary=complaint.ai_summary,
+        urgency_score=complaint.urgency_score,
+        safety_risk=complaint.safety_risk,
+        ai_reasoning=complaint.ai_reasoning,
         created_at=complaint.created_at,
     )
 
@@ -76,16 +88,30 @@ def sanitize_filename(filename):
     return re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("._") or "complaint-image"
 
 
-def ensure_issue_types_column(db):
+def ensure_complaint_columns(db):
     columns = {column["name"] for column in inspect(db.bind).get_columns("complaints")}
-    if "issue_types_json" in columns:
+    dialect = db.bind.dialect.name
+
+    additions = []
+    if "issue_types_json" not in columns:
+        additions.append(("issue_types_json", "JSONB" if dialect == "postgresql" else "JSON"))
+    if "ai_summary" not in columns:
+        additions.append(("ai_summary", "TEXT"))
+    if "urgency_score" not in columns:
+        additions.append(("urgency_score", "INTEGER"))
+    if "safety_risk" not in columns:
+        additions.append(("safety_risk", "BOOLEAN"))
+    if "ai_reasoning" not in columns:
+        additions.append(("ai_reasoning", "TEXT"))
+
+    if not additions:
         return
 
-    dialect = db.bind.dialect.name
-    if dialect == "postgresql":
-        db.execute(text("ALTER TABLE complaints ADD COLUMN IF NOT EXISTS issue_types_json JSONB"))
-    else:
-        db.execute(text("ALTER TABLE complaints ADD COLUMN issue_types_json JSON"))
+    for name, column_type in additions:
+        if dialect == "postgresql":
+            db.execute(text(f"ALTER TABLE complaints ADD COLUMN IF NOT EXISTS {name} {column_type}"))
+        else:
+            db.execute(text(f"ALTER TABLE complaints ADD COLUMN {name} {column_type}"))
     db.commit()
 
 
@@ -117,9 +143,24 @@ async def upload_complaint_image(file: UploadFile = File(...)):
     return UploadImageResponse(media_url=public_url)
 
 
+@router.post("/classify", response_model=ComplaintClassificationResponse)
+def classify_complaint_endpoint(payload: ComplaintClassifyRequest, db: Session = Depends(get_db)):
+    road_name = None
+    if payload.road_id:
+        road = db.get(RoadSegment, payload.road_id)
+        road_name = road.road_name if road else None
+
+    result = classify_complaint(
+        description=payload.description,
+        issue_types=payload.issue_types,
+        road_name=road_name,
+    )
+    return ComplaintClassificationResponse(**result)
+
+
 @router.post("", response_model=ComplaintCreateResponse)
 def create_complaint(payload: ComplaintCreate, db: Session = Depends(get_db)):
-    ensure_issue_types_column(db)
+    ensure_complaint_columns(db)
     road = db.get(RoadSegment, payload.road_id)
     if not road:
         raise HTTPException(status_code=404, detail="Road not found")
@@ -136,6 +177,10 @@ def create_complaint(payload: ComplaintCreate, db: Session = Depends(get_db)):
         lat=payload.lat,
         lng=payload.lng,
         status="Submitted",
+        ai_summary=payload.ai_summary,
+        urgency_score=payload.urgency_score,
+        safety_risk=payload.safety_risk,
+        ai_reasoning=payload.ai_reasoning,
         created_at=created_at,
     )
     db.add(complaint)
@@ -152,7 +197,7 @@ def create_complaint(payload: ComplaintCreate, db: Session = Depends(get_db)):
 
 @router.get("/{complaint_id}", response_model=ComplaintDetail)
 def get_complaint(complaint_id: str, db: Session = Depends(get_db)):
-    ensure_issue_types_column(db)
+    ensure_complaint_columns(db)
     complaint = db.get(Complaint, complaint_id)
     if not complaint:
         raise HTTPException(status_code=404, detail="Complaint not found")
@@ -161,7 +206,7 @@ def get_complaint(complaint_id: str, db: Session = Depends(get_db)):
 
 @router.get("/road/{road_id}", response_model=list[ComplaintDetail])
 def get_road_complaints(road_id: str, db: Session = Depends(get_db)):
-    ensure_issue_types_column(db)
+    ensure_complaint_columns(db)
     complaints = (
         db.query(Complaint)
         .filter(Complaint.road_id == road_id)

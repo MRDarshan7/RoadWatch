@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { uploadImage, submitComplaint } from '../api/complaints.js';
+import { classifyComplaint, submitComplaint, uploadImage } from '../api/complaints.js';
 import { getRoadById, searchRoads } from '../api/roads.js';
 
 const MIN_DESCRIPTION_LENGTH = 25;
@@ -62,6 +62,7 @@ function ComplaintPage() {
   const [photo, setPhoto] = useState(null);
   const [photoPreview, setPhotoPreview] = useState('');
   const [uploadError, setUploadError] = useState('');
+  const [classification, setClassification] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(null);
@@ -230,21 +231,31 @@ function ComplaintPage() {
 
   const nextFromStep2 = async () => {
     if (!canContinueStep2) return;
-    if (!photo || form.media_url) {
-      setStep(3);
-      return;
-    }
     try {
       setLoading(true);
-      setUploadError('');
-      const result = await uploadImage(photo);
-      updateForm('media_url', result.media_url);
+      setError('');
+      let mediaUrl = form.media_url;
+      if (photo && !mediaUrl) {
+        setUploadError('');
+        const uploadResult = await uploadImage(photo);
+        mediaUrl = uploadResult.media_url;
+        updateForm('media_url', mediaUrl);
+      }
+
+      const aiResult = await classifyComplaint({
+        description: form.description,
+        issue_types: classification?.normalized_issue_types || form.issue_types,
+        road_id: form.road_id,
+      });
+      setClassification(aiResult);
       setStep(3);
-    } catch (uploadFailure) {
-      setUploadError(
-        uploadFailure?.response?.data?.detail ||
-          'Image upload failed. Remove the photo to continue without it, or try again.',
-      );
+    } catch (failure) {
+      const detail = failure?.response?.data?.detail || 'AI analysis failed. Check API key setup and try again.';
+      if (photo && !form.media_url && detail.toLowerCase().includes('upload')) {
+        setUploadError(detail);
+      } else {
+        setError(detail);
+      }
     } finally {
       setLoading(false);
     }
@@ -261,6 +272,11 @@ function ComplaintPage() {
         lat: Number(form.lat),
         lng: Number(form.lng),
         media_url: form.media_url || null,
+        severity: classification?.severity || 'Medium',
+        ai_summary: classification?.summary_english || null,
+        urgency_score: classification?.urgency_score || null,
+        safety_risk: classification?.safety_risk ?? null,
+        ai_reasoning: classification?.reasoning || null,
       });
       setSuccess(result);
     } catch (submitError) {
@@ -278,6 +294,7 @@ function ComplaintPage() {
     setPhoto(null);
     setPhotoPreview('');
     setUploadError('');
+    setClassification(null);
     setSuccess(null);
     setError('');
   };
@@ -473,7 +490,7 @@ function ComplaintPage() {
                 Back
               </button>
               <button className="rounded-xl bg-[#38bdf8] px-4 py-3 font-bold text-[#0f172a] disabled:cursor-not-allowed disabled:opacity-50" disabled={!canContinueStep2 || loading} onClick={nextFromStep2}>
-                {loading ? 'Uploading...' : 'Next'}
+                {loading ? (photo && !form.media_url ? 'Uploading image...' : 'AI is analyzing your complaint...') : 'Next'}
               </button>
             </div>
           </div>
@@ -486,7 +503,7 @@ function ComplaintPage() {
               <div className="space-y-3 text-sm text-[#f1f5f9]">
                 <p><span className="text-[#94a3b8]">Road:</span> {form.road_name}</p>
                 <div>
-                  <span className="text-[#94a3b8]">Issues:</span>
+                  <span className="text-[#94a3b8]">Original selections:</span>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {selectedIssues.map((issue) => (
                       <span key={issue.label} className="rounded-full bg-[#0f172a] px-3 py-1 text-xs font-bold text-[#38bdf8]">
@@ -495,6 +512,35 @@ function ComplaintPage() {
                     ))}
                   </div>
                 </div>
+                <div>
+                  <span className="text-[#94a3b8]">AI-normalized issues:</span>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {(classification?.normalized_issue_types || form.issue_types).map((issue) => (
+                      <span key={issue} className="rounded-full bg-[#0f172a] px-3 py-1 text-xs font-bold text-[#f1f5f9]">
+                        {issue}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <span className="rounded-full bg-[#0f172a] px-3 py-1 text-xs font-bold text-[#f1f5f9]">
+                    Severity: {classification?.severity || 'Medium'}
+                  </span>
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-bold ${
+                      classification?.safety_risk ? 'bg-red-500 text-white' : 'bg-[#0f172a] text-[#94a3b8]'
+                    }`}
+                  >
+                    {classification?.safety_risk ? 'Safety Risk' : 'No Immediate Safety Risk'}
+                  </span>
+                  <span className="rounded-full bg-[#38bdf8] px-3 py-1 text-xs font-bold text-[#0f172a]">
+                    Urgency: {classification?.urgency_score || 6}/10
+                  </span>
+                </div>
+                <p>
+                  <span className="text-[#94a3b8]">AI routing summary:</span>{' '}
+                  {classification?.summary_english || form.description}
+                </p>
                 <p><span className="text-[#94a3b8]">Description:</span> {form.description.length > 100 ? `${form.description.slice(0, 100)}...` : form.description}</p>
                 <p><span className="text-[#94a3b8]">GPS:</span> {form.lat}, {form.lng}</p>
               </div>
@@ -502,7 +548,7 @@ function ComplaintPage() {
               <p className="mt-4 rounded-xl bg-[#0f172a] p-3 text-sm text-[#94a3b8]">Your complaint will be automatically routed to the correct authority after submission.</p>
             </div>
             <button className="text-sm font-semibold text-[#38bdf8]" onClick={() => setStep(2)}>
-              Edit
+              Edit details
             </button>
             <div className="grid gap-3 sm:grid-cols-2">
               <button className="rounded-xl bg-[#334155] px-4 py-3 font-bold text-[#f1f5f9]" onClick={() => setStep(2)}>

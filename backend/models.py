@@ -1,5 +1,5 @@
 from database import Base
-from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, JSON, String, func
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, JSON, String, func
 from sqlalchemy.orm import relationship, mapped_column
 
 
@@ -71,6 +71,10 @@ class Complaint(Base):
     sla_deadline = mapped_column(DateTime, nullable=True)
     defect_detected = mapped_column(String, nullable=True)
     defect_confidence = mapped_column(Float, nullable=True)
+    ai_summary = mapped_column(String, nullable=True)
+    urgency_score = mapped_column(Integer, nullable=True)
+    safety_risk = mapped_column(Boolean, nullable=True)
+    ai_reasoning = mapped_column(String, nullable=True)
     created_at = mapped_column(DateTime, server_default=func.now())
 
     road = relationship("RoadSegment", back_populates="complaints")

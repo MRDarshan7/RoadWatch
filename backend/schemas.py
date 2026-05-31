@@ -76,6 +76,10 @@ class ComplaintCreate(BaseModel):
     lng: float
     media_url: str | None = None
     severity: str = "Medium"
+    ai_summary: str | None = None
+    urgency_score: int | None = None
+    safety_risk: bool | None = None
+    ai_reasoning: str | None = None
 
     @model_validator(mode="after")
     def normalize_issue_types(self):
@@ -84,6 +88,8 @@ class ComplaintCreate(BaseModel):
         if not self.issue_types:
             raise ValueError("At least one issue type is required")
         self.issue_types = [issue.strip() for issue in self.issue_types if issue.strip()]
+        if not self.issue_types:
+            raise ValueError("At least one issue type is required")
         self.issue_type = self.issue_types[0]
         return self
 
@@ -115,11 +121,31 @@ class ComplaintDetail(BaseModel):
     assigned_authority_name: str | None = None
     assigned_officer: str | None = None
     sla_deadline: datetime | None
+    ai_summary: str | None = None
+    urgency_score: int | None = None
+    safety_risk: bool | None = None
+    ai_reasoning: str | None = None
     created_at: datetime | None
 
 
 class UploadImageResponse(BaseModel):
     media_url: str
+
+
+class ComplaintClassifyRequest(BaseModel):
+    description: str
+    issue_types: list[str] = Field(default_factory=list)
+    road_id: str | None = None
+
+
+class ComplaintClassificationResponse(BaseModel):
+    normalized_issue_types: list[str]
+    severity: str
+    safety_risk: bool
+    urgency_score: int
+    summary_english: str
+    reasoning: str
+    provider_used: str
 
 
 class AuthorityDetail(BaseModel):
