@@ -60,6 +60,7 @@ class Complaint(Base):
     complaint_id = mapped_column(String, primary_key=True)
     road_id = mapped_column(String, ForeignKey("road_segments.road_id"))
     issue_type = mapped_column(String)
+    issue_types_json = mapped_column(JSON, nullable=True)
     severity = mapped_column(String)
     description = mapped_column(String)
     media_url = mapped_column(String, nullable=True)

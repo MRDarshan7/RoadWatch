@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class RoadListItem(BaseModel):
@@ -70,17 +70,30 @@ class RoadDetail(BaseModel):
 class ComplaintCreate(BaseModel):
     road_id: str
     description: str
-    issue_type: str
+    issue_type: str | None = None
+    issue_types: list[str] = Field(default_factory=list)
     lat: float
     lng: float
     media_url: str | None = None
     severity: str = "Medium"
+
+    @model_validator(mode="after")
+    def normalize_issue_types(self):
+        if not self.issue_types and self.issue_type:
+            self.issue_types = [self.issue_type]
+        if not self.issue_types:
+            raise ValueError("At least one issue type is required")
+        self.issue_types = [issue.strip() for issue in self.issue_types if issue.strip()]
+        self.issue_type = self.issue_types[0]
+        return self
 
 
 class ComplaintCreateResponse(BaseModel):
     complaint_id: str
     status: str
     created_at: datetime
+    road_name: str
+    message: str
 
 
 class ComplaintDetail(BaseModel):
@@ -88,7 +101,10 @@ class ComplaintDetail(BaseModel):
 
     complaint_id: str
     road_id: str
+    road_name: str | None = None
+    road_type: str | None = None
     issue_type: str | None
+    issue_types: list[str] = Field(default_factory=list)
     severity: str | None
     description: str | None
     media_url: str | None
@@ -97,10 +113,13 @@ class ComplaintDetail(BaseModel):
     status: str | None
     assigned_authority_id: str | None
     assigned_authority_name: str | None = None
+    assigned_officer: str | None = None
     sla_deadline: datetime | None
-    defect_detected: str | None
-    defect_confidence: float | None
     created_at: datetime | None
+
+
+class UploadImageResponse(BaseModel):
+    media_url: str
 
 
 class AuthorityDetail(BaseModel):
